@@ -164,6 +164,10 @@ local SelectedPlayer = ""
 local PlayerDropdown
 local PlayersScrollFrame
 
+-- ESP Variables
+local ESPEnabled = false
+local ESPConnections = {}
+
 function UpdateContent()
     ContentFrame:ClearAllChildren()
     
@@ -245,8 +249,8 @@ function UpdateContent()
     elseif CurrentTab == "Visuals" then
         -- ESP Toggle
         CreateToggle("ESP", UDim2.new(0, 0, 0, 0), function(state)
-            ESP = state
-            if ESP then
+            ESPEnabled = state
+            if ESPEnabled then
                 ActivateESP()
             else
                 DeactivateESP()
@@ -509,6 +513,91 @@ function CreateButton(name, position, callback)
     end)
 end
 
+-- Improved ESP Function
+function ActivateESP()
+    ESPEnabled = true
+    
+    -- Clear existing connections
+    for _, connection in pairs(ESPConnections) do
+        connection:Disconnect()
+    end
+    ESPConnections = {}
+    
+    local function AddESP(player)
+        if player == Player then return end
+        
+        local function ApplyHighlight()
+            if player.Character then
+                -- Remove existing highlight
+                local existingHighlight = player.Character:FindFirstChild("YnvESP")
+                if existingHighlight then
+                    existingHighlight:Destroy()
+                end
+                
+                -- Create new highlight
+                local highlight = Instance.new("Highlight")
+                highlight.Name = "YnvESP"
+                highlight.FillColor = Color3.fromRGB(255, 0, 0)
+                highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+                highlight.FillTransparency = 0.5
+                highlight.OutlineTransparency = 0
+                highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+                highlight.Parent = player.Character
+                highlight.Adornee = player.Character
+            end
+        end
+        
+        -- Apply ESP immediately if character exists
+        if player.Character then
+            ApplyHighlight()
+        end
+        
+        -- Connect to character added event
+        local characterConnection = player.CharacterAdded:Connect(function(character)
+            wait(1) -- Wait for character to fully load
+            if ESPEnabled then
+                ApplyHighlight()
+            end
+        end)
+        
+        table.insert(ESPConnections, characterConnection)
+    end
+    
+    -- Add ESP to all existing players
+    for _, player in pairs(game:GetService("Players"):GetPlayers()) do
+        AddESP(player)
+    end
+    
+    -- Add ESP to new players
+    local playerAddedConnection = game:GetService("Players").PlayerAdded:Connect(function(player)
+        if ESPEnabled then
+            AddESP(player)
+        end
+    end)
+    
+    table.insert(ESPConnections, playerAddedConnection)
+end
+
+function DeactivateESP()
+    ESPEnabled = false
+    
+    -- Disconnect all connections
+    for _, connection in pairs(ESPConnections) do
+        connection:Disconnect()
+    end
+    ESPConnections = {}
+    
+    -- Remove all highlights
+    for _, player in pairs(game:GetService("Players"):GetPlayers()) do
+        if player.Character then
+            local highlight = player.Character:FindFirstChild("YnvESP")
+            if highlight then
+                highlight:Destroy()
+            end
+        end
+    end
+end
+
 -- Freeze Function
 function ActivateFreeze()
     if Player.Character and Player.Character:FindFirstChild("Humanoid") then
@@ -672,27 +761,6 @@ function DeactivateFly()
     if FlyConnection then
         FlyConnection:Disconnect()
         FlyConnection = nil
-    end
-end
-
--- ESP Function
-function ActivateESP()
-    for _, player in pairs(game:GetService("Players"):GetPlayers()) do
-        if player ~= Player and player.Character then
-            local highlight = Instance.new("Highlight")
-            highlight.Name = "ESP"
-            highlight.Parent = player.Character
-            highlight.Adornee = player.Character
-            highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-        end
-    end
-end
-
-function DeactivateESP()
-    for _, player in pairs(game:GetService("Players"):GetPlayers()) do
-        if player.Character and player.Character:FindFirstChild("ESP") then
-            player.Character.ESP:Destroy()
-        end
     end
 end
 
