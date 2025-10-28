@@ -3,6 +3,7 @@ local Player = game:GetService("Players").LocalPlayer
 local Mouse = Player:GetMouse()
 local UIS = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
+local TeleportService = game:GetService("TeleportService")
 
 -- GUI Creation
 local ScreenGui = Instance.new("ScreenGui")
@@ -55,7 +56,7 @@ ExpandButton.MouseButton1Click:Connect(function()
 end)
 
 -- Tabs
-local Tabs = {"Movement", "Flight", "Visuals", "Teleport", "Follow", "Troll", "Tools"}
+local Tabs = {"Movement", "Flight", "Visuals", "Teleport", "Follow", "Troll", "Server", "Tools"}
 local CurrentTab = "Movement"
 
 local LeftPanel = Instance.new("Frame")
@@ -170,8 +171,12 @@ local ESPConnections = {}
 
 -- Follow Variables
 local Following = false
+local Orbiting = false
 local FollowTarget = nil
+local OrbitTarget = nil
 local FollowConnection = nil
+local OrbitConnection = nil
+local OrbitAngle = 0
 
 -- Troll Variables
 local PushPlayers = false
@@ -180,6 +185,10 @@ local FloatPlayers = false
 local PushConnection = nil
 local SpinConnection = nil
 local FloatConnection = nil
+
+-- Anti-AFK Variables
+local AntiAFKEnabled = false
+local AntiAFKConnection = nil
 
 function UpdateContent()
     ContentFrame:ClearAllChildren()
@@ -398,11 +407,26 @@ function UpdateContent()
             end
         end)
         
+        -- Start Orbit Button
+        CreateButton("Orbit Player", UDim2.new(0, 0, 0, 145), function()
+            local targetName = FollowDropdown.Text
+            if targetName ~= "" and not Orbiting then
+                StartOrbit(targetName)
+            end
+        end)
+        
+        -- Stop Orbit Button
+        CreateButton("Stop Orbit", UDim2.new(0, 0, 0, 185), function()
+            if Orbiting then
+                StopOrbit()
+            end
+        end)
+        
         -- Status Label
         local StatusLabel = Instance.new("TextLabel")
         StatusLabel.Name = "StatusLabel"
         StatusLabel.Size = UDim2.new(1, -10, 0, 20)
-        StatusLabel.Position = UDim2.new(0, 0, 0, 145)
+        StatusLabel.Position = UDim2.new(0, 0, 0, 225)
         StatusLabel.BackgroundTransparency = 1
         StatusLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
         StatusLabel.Text = "Status: Not Following"
@@ -410,7 +434,7 @@ function UpdateContent()
         StatusLabel.Parent = ContentFrame
         
         -- Refresh Players Button
-        CreateButton("Refresh Players List", UDim2.new(0, 0, 0, 175), function()
+        CreateButton("Refresh Players List", UDim2.new(0, 0, 0, 255), function()
             UpdateFollowPlayersList()
         end)
         
@@ -418,7 +442,7 @@ function UpdateContent()
         local FollowPlayersListLabel = Instance.new("TextLabel")
         FollowPlayersListLabel.Name = "FollowPlayersListLabel"
         FollowPlayersListLabel.Size = UDim2.new(1, -10, 0, 20)
-        FollowPlayersListLabel.Position = UDim2.new(0, 0, 0, 215)
+        FollowPlayersListLabel.Position = UDim2.new(0, 0, 0, 295)
         FollowPlayersListLabel.BackgroundTransparency = 1
         FollowPlayersListLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
         FollowPlayersListLabel.Text = "Online Players (Click to select):"
@@ -429,7 +453,7 @@ function UpdateContent()
         local FollowPlayersScrollFrame = Instance.new("ScrollingFrame")
         FollowPlayersScrollFrame.Name = "FollowPlayersScrollFrame"
         FollowPlayersScrollFrame.Size = UDim2.new(1, -10, 0, 150)
-        FollowPlayersScrollFrame.Position = UDim2.new(0, 0, 0, 240)
+        FollowPlayersScrollFrame.Position = UDim2.new(0, 0, 0, 320)
         FollowPlayersScrollFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
         FollowPlayersScrollFrame.BorderSizePixel = 0
         FollowPlayersScrollFrame.ScrollBarThickness = 8
@@ -530,6 +554,40 @@ function UpdateContent()
         InfoLabel.TextWrapped = true
         InfoLabel.TextXAlignment = Enum.TextXAlignment.Left
         InfoLabel.Parent = ContentFrame
+        
+    elseif CurrentTab == "Server" then
+        -- Server Hop Button
+        CreateButton("Server Hop", UDim2.new(0, 0, 0, 0), function()
+            ServerHop()
+        end)
+        
+        -- Rejoin Server Button
+        CreateButton("Rejoin Server", UDim2.new(0, 0, 0, 40), function()
+            RejoinServer()
+        end)
+        
+        -- Anti-AFK Toggle
+        CreateToggle("Anti-AFK", UDim2.new(0, 0, 0, 80), function(state)
+            AntiAFKEnabled = state
+            if AntiAFKEnabled then
+                StartAntiAFK()
+            else
+                StopAntiAFK()
+            end
+        end)
+        
+        -- Server Info
+        local ServerInfoLabel = Instance.new("TextLabel")
+        ServerInfoLabel.Name = "ServerInfoLabel"
+        ServerInfoLabel.Size = UDim2.new(1, -10, 0, 60)
+        ServerInfoLabel.Position = UDim2.new(0, 0, 0, 120)
+        ServerInfoLabel.BackgroundTransparency = 1
+        ServerInfoLabel.TextColor3 = Color3.fromRGB(255, 255, 150)
+        ServerInfoLabel.Text = "Server ID: " .. game.JobId .. "\nPlayers: " .. #game:GetService("Players"):GetPlayers() .. "/" .. game.Players.MaxPlayers
+        ServerInfoLabel.TextSize = 12
+        ServerInfoLabel.TextWrapped = true
+        ServerInfoLabel.TextXAlignment = Enum.TextXAlignment.Left
+        ServerInfoLabel.Parent = ContentFrame
         
     elseif CurrentTab == "Tools" then
         -- Get Delete Tool Button
@@ -666,6 +724,70 @@ function StopFollow()
     if FollowConnection then
         FollowConnection:Disconnect()
         FollowConnection = nil
+    end
+    
+    -- Update status
+    local statusLabel = ContentFrame:FindFirstChild("StatusLabel")
+    if statusLabel then
+        statusLabel.Text = "Status: Not Following"
+        statusLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    end
+end
+
+-- Orbit Functions
+function StartOrbit(playerName)
+    local targetPlayer = game:GetService("Players"):FindFirstChild(playerName)
+    if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
+        if Player.Character and Player.Character:FindFirstChild("HumanoidRootPart") then
+            Orbiting = true
+            OrbitTarget = targetPlayer
+            OrbitAngle = 0
+            
+            -- Update status
+            local statusLabel = ContentFrame:FindFirstChild("StatusLabel")
+            if statusLabel then
+                statusLabel.Text = "Status: Orbiting " .. playerName
+                statusLabel.TextColor3 = Color3.fromRGB(0, 200, 255)
+            end
+            
+            -- Start orbit loop
+            OrbitConnection = RunService.Heartbeat:Connect(function()
+                if not Orbiting or not OrbitTarget or not OrbitTarget.Character then
+                    StopOrbit()
+                    return
+                end
+                
+                local targetRoot = OrbitTarget.Character:FindFirstChild("HumanoidRootPart")
+                local myRoot = Player.Character:FindFirstChild("HumanoidRootPart")
+                
+                if targetRoot and myRoot then
+                    -- Calculate orbit position (circle around player)
+                    local orbitRadius = 5 -- Distance from player
+                    OrbitAngle = OrbitAngle + 0.1 -- Быстрое вращение
+                    
+                    if OrbitAngle > 2 * math.pi then
+                        OrbitAngle = 0
+                    end
+                    
+                    local orbitX = math.cos(OrbitAngle) * orbitRadius
+                    local orbitZ = math.sin(OrbitAngle) * orbitRadius
+                    local orbitPosition = targetRoot.Position + Vector3.new(orbitX, 2, orbitZ)
+                    
+                    -- Move to orbit position and look at target
+                    myRoot.CFrame = CFrame.new(orbitPosition, targetRoot.Position)
+                end
+            end)
+        end
+    end
+end
+
+function StopOrbit()
+    Orbiting = false
+    OrbitTarget = nil
+    
+    if OrbitConnection then
+        OrbitConnection:Disconnect()
+        OrbitConnection = nil
     end
     
     -- Update status
@@ -822,6 +944,66 @@ function CameraShake()
     end
     
     camera.CFrame = originalPosition
+end
+
+-- Server Functions
+function ServerHop()
+    local Http = game:GetService("HttpService")
+    local TPS = game:GetService("TeleportService")
+    local Players = game:GetService("Players")
+    
+    local function GetServers(placeId)
+        local servers = {}
+        local url = "https://games.roblox.com/v1/games/" .. placeId .. "/servers/Public?sortOrder=Desc&limit=100"
+        
+        local success, result = pcall(function()
+            return Http:JSONDecode(game:HttpGet(url))
+        end)
+        
+        if success and result.data then
+            for _, server in pairs(result.data) do
+                if server.playing < server.maxPlayers and server.id ~= game.JobId then
+                    table.insert(servers, server.id)
+                end
+            end
+        end
+        
+        return servers
+    end
+    
+    local servers = GetServers(game.PlaceId)
+    if #servers > 0 then
+        local randomServer = servers[math.random(1, #servers)]
+        TPS:TeleportToPlaceInstance(game.PlaceId, randomServer, Players.LocalPlayer)
+    else
+        TPS:Teleport(game.PlaceId)
+    end
+end
+
+function RejoinServer()
+    local TPS = game:GetService("TeleportService")
+    TPS:TeleportToPlaceInstance(game.PlaceId, game.JobId, Player)
+end
+
+-- Anti-AFK Function
+function StartAntiAFK()
+    AntiAFKConnection = RunService.Heartbeat:Connect(function()
+        if not AntiAFKEnabled then return end
+        
+        -- Simulate movement to prevent AFK
+        if Player.Character and Player.Character:FindFirstChild("Humanoid") then
+            local humanoid = Player.Character.Humanoid
+            -- Small movement to prevent AFK detection
+            humanoid:Move(Vector3.new(math.random(-1, 1), 0, math.random(-1, 1)))
+        end
+    end)
+end
+
+function StopAntiAFK()
+    if AntiAFKConnection then
+        AntiAFKConnection:Disconnect()
+        AntiAFKConnection = nil
+    end
 end
 
 function CreateToggle(name, position, callback)
