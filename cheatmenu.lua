@@ -55,7 +55,7 @@ ExpandButton.MouseButton1Click:Connect(function()
 end)
 
 -- Tabs
-local Tabs = {"Movement", "Flight", "Visuals", "Teleport", "Follow", "Tools"}
+local Tabs = {"Movement", "Flight", "Visuals", "Teleport", "Follow", "Troll", "Tools"}
 local CurrentTab = "Movement"
 
 local LeftPanel = Instance.new("Frame")
@@ -172,6 +172,14 @@ local ESPConnections = {}
 local Following = false
 local FollowTarget = nil
 local FollowConnection = nil
+
+-- Troll Variables
+local PushPlayers = false
+local SpinPlayers = false
+local FloatPlayers = false
+local PushConnection = nil
+local SpinConnection = nil
+local FloatConnection = nil
 
 function UpdateContent()
     ContentFrame:ClearAllChildren()
@@ -474,6 +482,55 @@ function UpdateContent()
         
         UpdateFollowPlayersList()
         
+    elseif CurrentTab == "Troll" then
+        -- Push Players Toggle
+        CreateToggle("Push Players", UDim2.new(0, 0, 0, 0), function(state)
+            PushPlayers = state
+            if PushPlayers then
+                StartPushPlayers()
+            else
+                StopPushPlayers()
+            end
+        end)
+        
+        -- Spin Players Toggle
+        CreateToggle("Spin Players", UDim2.new(0, 0, 0, 40), function(state)
+            SpinPlayers = state
+            if SpinPlayers then
+                StartSpinPlayers()
+            else
+                StopSpinPlayers()
+            end
+        end)
+        
+        -- Float Players Toggle
+        CreateToggle("Float Players", UDim2.new(0, 0, 0, 80), function(state)
+            FloatPlayers = state
+            if FloatPlayers then
+                StartFloatPlayers()
+            else
+                StopFloatPlayers()
+            end
+        end)
+        
+        -- Camera Shake Button
+        CreateButton("Camera Shake", UDim2.new(0, 0, 0, 120), function()
+            CameraShake()
+        end)
+        
+        -- Info Label
+        local InfoLabel = Instance.new("TextLabel")
+        InfoLabel.Name = "InfoLabel"
+        InfoLabel.Size = UDim2.new(1, -10, 0, 40)
+        InfoLabel.Position = UDim2.new(0, 0, 0, 160)
+        InfoLabel.BackgroundTransparency = 1
+        InfoLabel.TextColor3 = Color3.fromRGB(255, 255, 150)
+        InfoLabel.Text = "Use Noclip + these functions to troll players effectively"
+        InfoLabel.TextSize = 12
+        InfoLabel.TextWrapped = true
+        InfoLabel.TextXAlignment = Enum.TextXAlignment.Left
+        InfoLabel.Parent = ContentFrame
+        
     elseif CurrentTab == "Tools" then
         -- Get Delete Tool Button
         CreateButton("Get Delete Tool", UDim2.new(0, 0, 0, 0), function()
@@ -590,7 +647,7 @@ function StartFollow(playerName)
                 local myRoot = Player.Character:FindFirstChild("HumanoidRootPart")
                 
                 if targetRoot and myRoot then
-                    -- Calculate position behind the target (2 studs behind)
+                    -- Calculate position behind the target (3 studs behind)
                     local backOffset = targetRoot.CFrame.LookVector * -3
                     local newPosition = targetRoot.Position + backOffset + Vector3.new(0, 0, 0)
                     
@@ -617,6 +674,154 @@ function StopFollow()
         statusLabel.Text = "Status: Not Following"
         statusLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
     end
+end
+
+-- Troll Functions
+function StartPushPlayers()
+    PushConnection = RunService.Heartbeat:Connect(function()
+        if not PushPlayers then return end
+        
+        for _, targetPlayer in pairs(game:GetService("Players"):GetPlayers()) do
+            if targetPlayer ~= Player and targetPlayer.Character then
+                local targetRoot = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+                local myRoot = Player.Character and Player.Character:FindFirstChild("HumanoidRootPart")
+                
+                if targetRoot and myRoot then
+                    local distance = (targetRoot.Position - myRoot.Position).Magnitude
+                    if distance < 10 then -- Push radius
+                        local direction = (targetRoot.Position - myRoot.Position).Unit
+                        local pushForce = direction * 50 -- Push strength
+                        
+                        -- Apply push force
+                        targetRoot.Velocity = targetRoot.Velocity + pushForce
+                    end
+                end
+            end
+        end
+    end)
+end
+
+function StopPushPlayers()
+    if PushConnection then
+        PushConnection:Disconnect()
+        PushConnection = nil
+    end
+end
+
+function StartSpinPlayers()
+    SpinConnection = RunService.Heartbeat:Connect(function()
+        if not SpinPlayers then return end
+        
+        for _, targetPlayer in pairs(game:GetService("Players"):GetPlayers()) do
+            if targetPlayer ~= Player and targetPlayer.Character then
+                local targetRoot = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+                
+                if targetRoot then
+                    -- Create or update spin force
+                    local spin = targetRoot:FindFirstChild("YnvSpin")
+                    if not spin then
+                        spin = Instance.new("BodyAngularVelocity")
+                        spin.Name = "YnvSpin"
+                        spin.MaxTorque = Vector3.new(0, math.huge, 0)
+                        spin.P = 1000
+                        spin.AngularVelocity = Vector3.new(0, 20, 0) -- Spin speed
+                        spin.Parent = targetRoot
+                    end
+                end
+            end
+        end
+    end)
+end
+
+function StopSpinPlayers()
+    if SpinConnection then
+        SpinConnection:Disconnect()
+        SpinConnection = nil
+    end
+    
+    -- Remove all spin effects
+    for _, targetPlayer in pairs(game:GetService("Players"):GetPlayers()) do
+        if targetPlayer.Character then
+            local targetRoot = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+            if targetRoot then
+                local spin = targetRoot:FindFirstChild("YnvSpin")
+                if spin then
+                    spin:Destroy()
+                end
+            end
+        end
+    end
+end
+
+function StartFloatPlayers()
+    FloatConnection = RunService.Heartbeat:Connect(function()
+        if not FloatPlayers then return end
+        
+        for _, targetPlayer in pairs(game:GetService("Players"):GetPlayers()) do
+            if targetPlayer ~= Player and targetPlayer.Character then
+                local targetRoot = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+                local myRoot = Player.Character and Player.Character:FindFirstChild("HumanoidRootPart")
+                
+                if targetRoot and myRoot then
+                    local distance = (targetRoot.Position - myRoot.Position).Magnitude
+                    if distance < 15 then -- Float radius
+                        -- Create or update float force
+                        local float = targetRoot:FindFirstChild("YnvFloat")
+                        if not float then
+                            float = Instance.new("BodyVelocity")
+                            float.Name = "YnvFloat"
+                            float.MaxForce = Vector3.new(0, math.huge, 0)
+                            float.Velocity = Vector3.new(0, 10, 0) -- Float upward
+                            float.Parent = targetRoot
+                        end
+                    else
+                        -- Remove float if too far
+                        local float = targetRoot:FindFirstChild("YnvFloat")
+                        if float then
+                            float:Destroy()
+                        end
+                    end
+                end
+            end
+        end
+    end)
+end
+
+function StopFloatPlayers()
+    if FloatConnection then
+        FloatConnection:Disconnect()
+        FloatConnection = nil
+    end
+    
+    -- Remove all float effects
+    for _, targetPlayer in pairs(game:GetService("Players"):GetPlayers()) do
+        if targetPlayer.Character then
+            local targetRoot = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+            if targetRoot then
+                local float = targetRoot:FindFirstChild("YnvFloat")
+                if float then
+                    float:Destroy()
+                end
+            end
+        end
+    end
+end
+
+function CameraShake()
+    local camera = workspace.CurrentCamera
+    local originalPosition = camera.CFrame
+    
+    for i = 1, 30 do -- Shake duration
+        local offset = Vector3.new(
+            math.random(-2, 2),
+            math.random(-1, 1),
+            math.random(-2, 2)
+        )
+        camera.CFrame = originalPosition + offset
+        wait(0.05)
+    end
+    
+    camera.CFrame = originalPosition
 end
 
 function CreateToggle(name, position, callback)
