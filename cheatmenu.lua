@@ -55,7 +55,7 @@ ExpandButton.MouseButton1Click:Connect(function()
 end)
 
 -- Tabs
-local Tabs = {"Movement", "Flight", "Visuals", "Teleport", "Tools"}
+local Tabs = {"Movement", "Flight", "Visuals", "Teleport", "Follow", "Tools"}
 local CurrentTab = "Movement"
 
 local LeftPanel = Instance.new("Frame")
@@ -167,6 +167,11 @@ local PlayersScrollFrame
 -- ESP Variables
 local ESPEnabled = false
 local ESPConnections = {}
+
+-- Follow Variables
+local Following = false
+local FollowTarget = nil
+local FollowConnection = nil
 
 function UpdateContent()
     ContentFrame:ClearAllChildren()
@@ -347,6 +352,128 @@ function UpdateContent()
         
         UpdatePlayersList()
         
+    elseif CurrentTab == "Follow" then
+        -- Player Dropdown Label
+        local DropdownLabel = Instance.new("TextLabel")
+        DropdownLabel.Name = "DropdownLabel"
+        DropdownLabel.Size = UDim2.new(1, -10, 0, 20)
+        DropdownLabel.Position = UDim2.new(0, 0, 0, 0)
+        DropdownLabel.BackgroundTransparency = 1
+        DropdownLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+        DropdownLabel.Text = "Select Player to Follow:"
+        DropdownLabel.TextXAlignment = Enum.TextXAlignment.Left
+        DropdownLabel.Parent = ContentFrame
+        
+        -- Player Dropdown
+        local FollowDropdown = Instance.new("TextBox")
+        FollowDropdown.Name = "FollowDropdown"
+        FollowDropdown.Size = UDim2.new(1, -10, 0, 30)
+        FollowDropdown.Position = UDim2.new(0, 0, 0, 25)
+        FollowDropdown.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+        FollowDropdown.TextColor3 = Color3.fromRGB(255, 255, 255)
+        FollowDropdown.PlaceholderText = "Enter player name..."
+        FollowDropdown.Text = ""
+        FollowDropdown.Parent = ContentFrame
+        
+        -- Start Follow Button
+        CreateButton("Start Follow", UDim2.new(0, 0, 0, 65), function()
+            local targetName = FollowDropdown.Text
+            if targetName ~= "" and not Following then
+                StartFollow(targetName)
+            end
+        end)
+        
+        -- Stop Follow Button
+        CreateButton("Stop Follow", UDim2.new(0, 0, 0, 105), function()
+            if Following then
+                StopFollow()
+            end
+        end)
+        
+        -- Status Label
+        local StatusLabel = Instance.new("TextLabel")
+        StatusLabel.Name = "StatusLabel"
+        StatusLabel.Size = UDim2.new(1, -10, 0, 20)
+        StatusLabel.Position = UDim2.new(0, 0, 0, 145)
+        StatusLabel.BackgroundTransparency = 1
+        StatusLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+        StatusLabel.Text = "Status: Not Following"
+        StatusLabel.TextXAlignment = Enum.TextXAlignment.Left
+        StatusLabel.Parent = ContentFrame
+        
+        -- Refresh Players Button
+        CreateButton("Refresh Players List", UDim2.new(0, 0, 0, 175), function()
+            UpdateFollowPlayersList()
+        end)
+        
+        -- Players List Label
+        local FollowPlayersListLabel = Instance.new("TextLabel")
+        FollowPlayersListLabel.Name = "FollowPlayersListLabel"
+        FollowPlayersListLabel.Size = UDim2.new(1, -10, 0, 20)
+        FollowPlayersListLabel.Position = UDim2.new(0, 0, 0, 215)
+        FollowPlayersListLabel.BackgroundTransparency = 1
+        FollowPlayersListLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+        FollowPlayersListLabel.Text = "Online Players (Click to select):"
+        FollowPlayersListLabel.TextXAlignment = Enum.TextXAlignment.Left
+        FollowPlayersListLabel.Parent = ContentFrame
+        
+        -- Scrollable Players Frame for Follow
+        local FollowPlayersScrollFrame = Instance.new("ScrollingFrame")
+        FollowPlayersScrollFrame.Name = "FollowPlayersScrollFrame"
+        FollowPlayersScrollFrame.Size = UDim2.new(1, -10, 0, 150)
+        FollowPlayersScrollFrame.Position = UDim2.new(0, 0, 0, 240)
+        FollowPlayersScrollFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+        FollowPlayersScrollFrame.BorderSizePixel = 0
+        FollowPlayersScrollFrame.ScrollBarThickness = 8
+        FollowPlayersScrollFrame.ScrollBarImageColor3 = Color3.fromRGB(100, 100, 100)
+        FollowPlayersScrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+        FollowPlayersScrollFrame.Parent = ContentFrame
+        
+        local function UpdateFollowPlayersList()
+            if not FollowPlayersScrollFrame then return end
+            
+            -- Clear existing player buttons
+            FollowPlayersScrollFrame:ClearAllChildren()
+            
+            local players = game:GetService("Players"):GetPlayers()
+            local buttonHeight = 25
+            local totalHeight = 0
+            
+            for i, targetPlayer in pairs(players) do
+                if targetPlayer ~= Player then
+                    local PlayerButton = Instance.new("TextButton")
+                    PlayerButton.Name = "PlayerButton"
+                    PlayerButton.Size = UDim2.new(1, -5, 0, buttonHeight)
+                    PlayerButton.Position = UDim2.new(0, 2, 0, (i-1)*buttonHeight)
+                    PlayerButton.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+                    PlayerButton.BorderSizePixel = 0
+                    PlayerButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+                    PlayerButton.Text = targetPlayer.Name
+                    PlayerButton.TextSize = 12
+                    PlayerButton.Parent = FollowPlayersScrollFrame
+                    
+                    PlayerButton.MouseButton1Click:Connect(function()
+                        FollowDropdown.Text = targetPlayer.Name
+                    end)
+                    
+                    PlayerButton.MouseEnter:Connect(function()
+                        PlayerButton.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
+                    end)
+                    
+                    PlayerButton.MouseLeave:Connect(function()
+                        PlayerButton.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+                    end)
+                    
+                    totalHeight = totalHeight + buttonHeight
+                end
+            end
+            
+            -- Update scroll frame size
+            FollowPlayersScrollFrame.CanvasSize = UDim2.new(0, 0, 0, totalHeight)
+        end
+        
+        UpdateFollowPlayersList()
+        
     elseif CurrentTab == "Tools" then
         -- Get Delete Tool Button
         CreateButton("Get Delete Tool", UDim2.new(0, 0, 0, 0), function()
@@ -434,6 +561,61 @@ function TeleportToPlayer(playerName)
         if Player.Character and Player.Character:FindFirstChild("HumanoidRootPart") then
             Player.Character.HumanoidRootPart.CFrame = targetPlayer.Character.HumanoidRootPart.CFrame
         end
+    end
+end
+
+-- Follow Functions
+function StartFollow(playerName)
+    local targetPlayer = game:GetService("Players"):FindFirstChild(playerName)
+    if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
+        if Player.Character and Player.Character:FindFirstChild("HumanoidRootPart") then
+            Following = true
+            FollowTarget = targetPlayer
+            
+            -- Update status
+            local statusLabel = ContentFrame:FindFirstChild("StatusLabel")
+            if statusLabel then
+                statusLabel.Text = "Status: Following " .. playerName
+                statusLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
+            end
+            
+            -- Start follow loop
+            FollowConnection = RunService.Heartbeat:Connect(function()
+                if not Following or not FollowTarget or not FollowTarget.Character then
+                    StopFollow()
+                    return
+                end
+                
+                local targetRoot = FollowTarget.Character:FindFirstChild("HumanoidRootPart")
+                local myRoot = Player.Character:FindFirstChild("HumanoidRootPart")
+                
+                if targetRoot and myRoot then
+                    -- Calculate position behind the target (2 studs behind)
+                    local backOffset = targetRoot.CFrame.LookVector * -3
+                    local newPosition = targetRoot.Position + backOffset + Vector3.new(0, 0, 0)
+                    
+                    -- Move to position behind target
+                    myRoot.CFrame = CFrame.new(newPosition, targetRoot.Position)
+                end
+            end)
+        end
+    end
+end
+
+function StopFollow()
+    Following = false
+    FollowTarget = nil
+    
+    if FollowConnection then
+        FollowConnection:Disconnect()
+        FollowConnection = nil
+    end
+    
+    -- Update status
+    local statusLabel = ContentFrame:FindFirstChild("StatusLabel")
+    if statusLabel then
+        statusLabel.Text = "Status: Not Following"
+        statusLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
     end
 end
 
